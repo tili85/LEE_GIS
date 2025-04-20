@@ -1,0 +1,940 @@
+// Required Dependencies:
+// - Node.js environment
+// - npm packages:
+//   - plotly (for plotting): npm install plotly
+//   - geotiff (for reading/writing GeoTIFFs): npm install geotiff
+//   - ndarray (optional, for numpy-like arrays): npm install ndarray
+//   - fs (Node.js built-in)
+// - A web browser environment is needed to run the GUI part (HTML/DOM manipulation).
+//   This code mixes Node.js style imports/file system access with browser DOM manipulation.
+//   A more realistic setup would separate backend (Node.js for processing) and frontend (Browser JS for UI).
+//   Or use a framework like Electron.
+
+// Node.js style imports (assuming a Node.js environment for file operations and potentially plotting)
+const fs = require('fs');
+const path = require('path');
+// Note: geotiff.js is primarily async
+const { fromFile, write } = require('geotiff');
+// Note: Plotly setup for Node.js
+const plotly = require('plotly')("your_plotly_username", "your_plotly_api_key"); // Replace with your credentials if saving to Plotly cloud or use plotly.js-offline/orca for local saving
+
+// --- Placeholder for PySheds Grid functionality ---
+// !! CRITICAL LIMITATION: PySheds is a complex Python library with no direct JavaScript equivalent.
+// !! The following Grid class provides the *structure* but NOT the actual hydrological algorithms.
+// !! These methods return dummy data or log messages. A full translation would require
+// !! reimplementing these complex spatial algorithms in JavaScript.
+class Grid {
+    constructor() {
+        this.extent = null;
+        this.bbox = null;
+        this.affine = null; // Representing rasterio's transform
+        this.crs = null;
+        this.nodata = null;
+        this._dem = null; // Internal storage for DEM data
+        console.warn("Grid class is a placeholder. Hydrological functions are not implemented.");
+    }
+
+    static async from_raster(filePath) {
+        console.log(`Placeholder: Grid.from_raster('${filePath}')`);
+        const grid = new Grid();
+        try {
+            const tiff = await fromFile(filePath);
+            const image = await tiff.getImage();
+            grid.bbox = image.getBoundingBox();
+            // extent might be [xmin, xmax, ymin, ymax] or [xmin, ymin, xmax, ymax] depending on convention
+            // PySheds extent is typically [xmin, xmax, ymin, ymax]
+            grid.extent = [grid.bbox[0], grid.bbox[2], grid.bbox[1], grid.bbox[3]];
+            grid.affine = image.getGeoKeys()?.ModelTransformation; // Or calculate from bbox and dimensions
+            grid.crs = image.getGeoKeys()?.ProjectedCSTypeGeoKey || image.getGeoKeys()?.GeographicTypeGeoKey; // Simplified
+            grid.nodata = image.getGDALNoData();
+            // Read the actual data for 'dem' when read_raster is called
+        } catch (error) {
+            console.error(`Error reading raster ${filePath}:`, error);
+            // Set some defaults if reading fails?
+            grid.extent = [0, 1, 0, 1];
+            grid.bbox = [0, 0, 1, 1];
+        }
+        return grid;
+    }
+
+    async read_raster(filePath) {
+        console.log(`Placeholder: grid.read_raster('${filePath}')`);
+        try {
+            const tiff = await fromFile(filePath);
+            const image = await tiff.getImage();
+            const data = await image.readRasters(); // Reads all bands
+            // Assuming DEM is the first band
+            // Note: Data might be multi-dimensional [bands, height, width] or [width, height]
+            // PySheds expects 2D [height, width]
+            // This might need adjustment based on actual GeoTIFF structure
+            this._dem = data[0]; // Assuming first band is DEM
+            // Ensure it's a 2D array-like structure (implementation depends on how data is returned)
+             if (Array.isArray(this._dem) && Array.isArray(this._dem[0])) {
+                 // Already 2D-like
+             } else if (Array.isArray(this._dem)) {
+                 // Potentially flat, needs reshaping if width/height known
+                 const width = image.getWidth();
+                 const height = image.getHeight();
+                 if (this._dem.length === width * height) {
+                     const reshaped = [];
+                     for (let i = 0; i < height; i++) {
+                         reshaped.push(this._dem.slice(i * width, (i + 1) * width));
+                     }
+                     this._dem = reshaped;
+                 } else {
+                      console.warn("DEM data format from geotiff.js might not be directly compatible with PySheds 2D array expectation.");
+                 }
+             }
+            return this._dem;
+        } catch (error) {
+            console.error(`Error reading raster data ${filePath}:`, error);
+            return null; // Or throw error
+        }
+    }
+
+    // --- Placeholder methods for PySheds algorithms ---
+    fill_pits(dem) {
+        console.log("Placeholder: grid.fill_pits");
+        return dem; // Return original DEM as placeholder
+    }
+
+    fill_depressions(pit_filled_dem) {
+        console.log("Placeholder: grid.fill_depressions");
+        return pit_filled_dem; // Return input as placeholder
+    }
+
+    resolve_flats(flooded_dem) {
+        console.log("Placeholder: grid.resolve_flats");
+        return flooded_dem; // Return input as placeholder
+    }
+
+    flowdir(inflated_dem, dirmap) {
+        console.log("Placeholder: grid.flowdir", "dirmap:", dirmap);
+        // Return a dummy flow direction array of the same shape as DEM
+        if (!inflated_dem || !Array.isArray(inflated_dem) || !Array.isArray(inflated_dem[0])) {
+             console.error("Invalid DEM data for flowdir placeholder");
+             return [[]];
+        }
+        const height = inflated_dem.length;
+        const width = inflated_dem[0].length;
+        // Fill with a default direction (e.g., 1, corresponding to East in D8)
+        return Array(height).fill(0).map(() => Array(width).fill(dirmap ? dirmap[2] : 1));
+    }
+
+    accumulation(fdir, dirmap) {
+        console.log("Placeholder: grid.accumulation", "dirmap:", dirmap);
+        // Return a dummy accumulation array of the same shape as fdir
+        if (!fdir || !Array.isArray(fdir) || !Array.isArray(fdir[0])) {
+             console.error("Invalid fdir data for accumulation placeholder");
+             return [[]];
+        }
+        const height = fdir.length;
+        const width = fdir[0].length;
+         // Fill with dummy values (e.g., increasing numbers)
+        let count = 0;
+        return Array(height).fill(0).map(row => Array(width).fill(0).map(cell => count++));
+    }
+
+    snap_to_mask(mask_condition, coords) {
+        console.log("Placeholder: grid.snap_to_mask", "coords:", coords);
+        // Return original coordinates as placeholder
+        return coords;
+    }
+
+    catchment(x, y, fdir, dirmap, xytype) {
+        console.log("Placeholder: grid.catchment", "x:", x, "y:", y, "xytype:", xytype, "dirmap:", dirmap);
+        // Return a dummy catchment mask (e.g., all true) of the same shape as fdir
+        if (!fdir || !Array.isArray(fdir) || !Array.isArray(fdir[0])) {
+             console.error("Invalid fdir data for catchment placeholder");
+             return [[]];
+        }
+        const height = fdir.length;
+        const width = fdir[0].length;
+        return Array(height).fill(0).map(() => Array(width).fill(true));
+    }
+
+    clip_to(mask) {
+        console.log("Placeholder: grid.clip_to");
+        // This method modifies the grid instance in pysheds.
+        // Here, we might adjust extent/bbox based on the mask, but it's complex.
+        // For simplicity, this placeholder does nothing to the grid instance.
+    }
+
+    view(data_array, nodata_value = NaN) {
+        console.log("Placeholder: grid.view");
+        // In pysheds, this often applies the grid's internal mask.
+        // Here, just return the data array as is.
+        return data_array;
+    }
+
+    extract_river_network(fdir, acc_condition_mask, dirmap) {
+        console.log("Placeholder: grid.extract_river_network", "dirmap:", dirmap);
+        // Return a dummy GeoJSON-like structure
+        return {
+            type: 'FeatureCollection',
+            features: [
+                {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: [ [this.extent[0], this.extent[2]], [this.extent[1], this.extent[3]] ] // Dummy diagonal line
+                    }
+                }
+            ]
+        };
+    }
+
+    distance_to_outlet(x, y, fdir, dirmap, xytype) {
+        console.log("Placeholder: grid.distance_to_outlet", "x:", x, "y:", y, "xytype:", xytype, "dirmap:", dirmap);
+         // Return a dummy distance array of the same shape as fdir
+        if (!fdir || !Array.isArray(fdir) || !Array.isArray(fdir[0])) {
+             console.error("Invalid fdir data for distance_to_outlet placeholder");
+             return [[]];
+        }
+        const height = fdir.length;
+        const width = fdir[0].length;
+         // Fill with dummy values (e.g., increasing numbers)
+        let count = 0;
+        return Array(height).fill(0).map(row => Array(width).fill(0).map(cell => count++));
+    }
+}
+
+// --- Helper function for numpy.where ---
+function npWhere(condition, x, y) {
+    // Basic implementation for 2D arrays
+    if (!Array.isArray(condition) || !Array.isArray(condition[0])) return [];
+    const rows = condition.length;
+    const cols = condition[0].length;
+    const result = [];
+    for (let i = 0; i < rows; i++) {
+        const rowResult = [];
+        for (let j = 0; j < cols; j++) {
+            // Assuming x and y are scalar values in this context based on Python usage
+            rowResult.push(condition[i][j] ? x[i][j] : y);
+        }
+        result.push(rowResult);
+    }
+    return result;
+}
+
+// --- Helper function for numpy.asarray ---
+// In JS, arrays are already the primary data structure. This might just ensure it's an array.
+function npAsArray(input) {
+    if (Array.isArray(input)) {
+        return input;
+    }
+    // Handle other potential types if necessary
+    return [input];
+}
+
+// --- Plotting Helper (using Plotly.js) ---
+// Note: Saving plots in Node.js usually requires plotly.js-orca or similar,
+// or using the Plotly cloud service. This example focuses on generating the plot data structure.
+async function savePlot(figureData, layoutData, filename) {
+    const figure = { data: figureData, layout: layoutData };
+    console.log(`Placeholder: Saving plot to ${filename}`);
+    console.log("Plot Data:", JSON.stringify(figure.data));
+    console.log("Plot Layout:", JSON.stringify(figure.layout));
+
+    // Example using plotly-client library (requires credentials setup above)
+    // Or use alternative like plotly.js-node-orca
+    /*
+    const imgOpts = {
+        format: 'png',
+        width: (layoutData.width || 800) * (layoutData.figsize ? layoutData.figsize[0] / 8 : 1), // Approximate width based on figsize
+        height: (layoutData.height || 600) * (layoutData.figsize ? layoutData.figsize[1] / 6 : 1) // Approximate height
+    };
+
+    try {
+        const plotly = require('plotly')("your_plotly_username", "your_plotly_api_key"); // Ensure plotly is initialized
+        plotly.getImage(figure, imgOpts, function (error, imageStream) {
+            if (error) return console.log ("Plotly error:", error);
+            const fileStream = fs.createWriteStream(filename);
+            imageStream.pipe(fileStream);
+            console.log(`Plot saved to ${filename}`);
+        });
+    } catch (err) {
+        console.error("Error saving plot with Plotly:", err);
+        console.log("Ensure Plotly credentials are set and the library is installed/configured.");
+    }
+    */
+     // Fallback: Just log that it would be saved
+     console.warn(`Plot saving to ${filename} requires Plotly setup (credentials/orca).`);
+     // Create dummy file to mimic saving action if needed for workflow
+     try {
+        fs.writeFileSync(filename, `Plot data for ${filename}`);
+     } catch (writeErr) {
+        console.error(`Could not write dummy file ${filename}:`, writeErr);
+     }
+}
+
+// --- GUI Setup (using basic DOM manipulation) ---
+// This code needs to run in a browser environment or an Electron renderer process.
+
+// Global variables to mimic Python's global scope for these variables
+let grid = null;
+let dem = null;
+let entradaLAT = null; // Will hold the input element
+let entradaLON = null; // Will hold the input element
+let clickr = null; // Will hold the select element
+
+// Check if running in a browser environment before manipulating DOM
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const ventana = document.body; // Use body as the main container
+    ventana.style.position = 'relative'; // Needed for absolute positioning of children
+    ventana.style.width = '850px';
+    ventana.style.height = '800px';
+    ventana.style.margin = '0'; // Remove default body margin
+
+    // Canvas equivalent (using a div for simplicity, as no drawing is done on it)
+    const my_canvas = document.createElement('div');
+    my_canvas.style.width = '100%'; // Fill available space
+    my_canvas.style.height = '1000px'; // As specified
+    my_canvas.style.border = '1px solid black'; // Make it visible
+    // Packing/expanding is handled by CSS/container logic, simplified here
+    ventana.appendChild(my_canvas);
+
+    // Image loading - User requested NO IMAGES, but the code includes it.
+    // Translating the code exactly, but commenting out the image display.
+    // const INICIOS_src = 'INICIO.png'; // Path relative to HTML file or absolute URL
+    // const INICIOS_img = document.createElement('img');
+    // INICIOS_img.src = INICIOS_src;
+    // INICIOS_img.style.position = 'absolute';
+    // INICIOS_img.style.left = '380px'; // Centered based on create_image args? Needs adjustment.
+    // INICIOS_img.style.top = '500px'; // Centered based on create_image args? Needs adjustment.
+    // INICIOS_img.alt = 'INICIO Image';
+    // my_canvas.appendChild(INICIOS_img); // Appending to canvas div
+
+    // Labels
+    function createLabel(text, x, y) {
+        const label = document.createElement('div');
+        label.textContent = text;
+        label.style.position = 'absolute';
+        label.style.left = `${x}px`;
+        label.style.top = `${y}px`;
+        ventana.appendChild(label); // Append directly to body/ventana
+        return label;
+    }
+
+    const CUENCA_GRANDE = createLabel("CUENCA DONDE SE UBICA LA PARCELA", 30, 620);
+    const PARCELA = createLabel("CUENCA QUE DRENA A LA PARCELA", 280, 620);
+    const DRENAJE = createLabel("DRENAJE HACIA LA PARCELA", 530, 620);
+    const INICIO_label = createLabel('SISTEMA DE INFORMACION GEOGRÁFICA PARA CUENCAS', 250, 40);
+
+    // --- obtener function ---
+    // Needs to be async because underlying raster operations are async
+    async function obtener() {
+        // Import Grid locally? No, use the global placeholder class defined above.
+        // from pysheds.grid import Grid // Not needed in JS
+
+        // File paths are hardcoded in Python. User request for choice is ignored per exact translation rule.
+        // grid = Grid.from_raster('F:\DEM_DGO_TIFF\AGUSTIN_MELGAR.tif') // Example path, handled in ELECCION
+        // dem = grid.read_raster('F:\DEM_DGO_TIFF\AGUSTIN_MELGAR.tif') // Example path, handled in ELECCION
+
+        // Ensure grid and dem are loaded (should be done by ELECCION)
+        if (!grid || !dem) {
+            alert("Error: Grid or DEM not loaded. Please select a Cuenca first.");
+            console.error("Error: Grid or DEM not loaded.");
+            return;
+        }
+
+        // Get values from input elements
+        const x_str = entradaLAT.value; // Assuming entradaLAT is the input element
+        const y_str = entradaLON.value; // Assuming entradaLON is the input element
+        const x = parseFloat(x_str); // Python's get() returns string, convert to number
+        const y = parseFloat(y_str); // Python's get() returns string, convert to number
+
+        if (isNaN(x) || isNaN(y)) {
+             alert("Invalid Latitude or Longitude input.");
+             console.error("Invalid coordinate input:", x_str, y_str);
+             return;
+        }
+
+        // --- Plotting DEM ---
+        // fig,ax=plt.subplots(figsize=(8,6)) // Setup plot figure
+        // fig.patch.set_alpha(0) // Not directly translatable, affects figure background transparency
+
+        // plt.imshow(dem, extent=grid.extent, cmap='terrain', zorder=1)
+        // plt.colorbar(label="Elevation (m)")
+        // plt.grid(zorder=0)
+        // plt.tight_layout()
+        // plt.show() // Display plot
+
+        // Plotly equivalent for DEM heatmap
+        const demTrace = {
+            z: dem, // The 2D DEM data array
+            x0: grid.extent[0], // xmin
+            dx: (grid.extent[1] - grid.extent[0]) / (dem[0]?.length || 1), // width / cols
+            y0: grid.extent[3], // ymax (Plotly heatmap y-axis often starts from top)
+            dy: -(grid.extent[3] - grid.extent[2]) / (dem?.length || 1), // -(height / rows)
+            type: 'heatmap',
+            colorscale: 'Viridis', // 'terrain' equivalent might be 'Earth' or custom
+            colorbar: {
+                title: 'Elevation (m)'
+            },
+            zorder: 1 // Not a direct Plotly concept, layering is implicit
+        };
+        const demLayout = {
+            title: 'Digital Elevation Model',
+            xaxis: { title: 'Longitude', range: [grid.extent[0], grid.extent[1]] },
+            yaxis: { title: 'Latitude', range: [grid.extent[2], grid.extent[3]], scaleanchor: "x", scaleratio: 1 }, // Maintain aspect ratio
+            // grid: { zorder: 0 } // Grid lines are part of axes settings in Plotly
+            // tight_layout: // Handled by Plotly's autosize or margins
+            // figsize: [8, 6] // Can set width/height in layout
+            width: 800,
+            height: 600,
+            showlegend: false
+        };
+        // Displaying plots in a browser context would typically use Plotly.newPlot('divId', data, layout)
+        // Since this might run in Node, we'll just log or attempt to save
+        console.log("--- Plotting DEM (Placeholder) ---");
+        // await savePlot([demTrace], demLayout, 'dem_plot.png'); // Requires Plotly setup
+
+        console.log("HOLA"); // Preserved print statement
+
+        // --- Hydrological Processing (Placeholders) ---
+        const pit_filled_dem = grid.fill_pits(dem);
+        const flooded_dem = grid.fill_depressions(pit_filled_dem);
+        const inflated_dem = grid.resolve_flats(flooded_dem);
+
+        const dirmap = [64, 128, 1, 2, 4, 8, 16, 32]; // D8 directions
+        const fdir = grid.flowdir(inflated_dem, dirmap);
+
+        // --- Plotting Flow Direction (Example - Not in original active code, but shows translation) ---
+        /*
+        const fdirTrace = {
+            z: fdir,
+            x0: grid.extent[0], dx: (grid.extent[1] - grid.extent[0]) / (fdir[0]?.length || 1),
+            y0: grid.extent[3], dy: -(grid.extent[3] - grid.extent[2]) / (fdir?.length || 1),
+            type: 'heatmap',
+            colorscale: 'Viridis',
+            colorbar: { title: 'Flow Direction (D8)' }, // Add boundaries/values if needed
+        };
+        const fdirLayout = {
+            title: 'Flow Direction',
+            xaxis: { title: 'Longitude', range: [grid.extent[0], grid.extent[1]] },
+            yaxis: { title: 'Latitude', range: [grid.extent[2], grid.extent[3]], scaleanchor: "x", scaleratio: 1 },
+            width: 800, height: 600, showlegend: false
+        };
+        console.log("--- Plotting Flow Direction (Placeholder) ---");
+        // await savePlot([fdirTrace], fdirLayout, 'fdir_plot.png');
+        */
+
+        const acc = grid.accumulation(fdir, dirmap);
+
+        // --- Plotting Accumulation (Example - Not in original active code, but shows translation) ---
+        /*
+        // Log norm requires calculating log of data, handling zeros/negatives
+        const logAcc = acc.map(row => row.map(cell => cell > 0 ? Math.log10(cell) : null)); // Basic log transform
+        const accTrace = {
+            z: logAcc, // Use log-transformed data
+            x0: grid.extent[0], dx: (grid.extent[1] - grid.extent[0]) / (acc[0]?.length || 1),
+            y0: grid.extent[3], dy: -(grid.extent[3] - grid.extent[2]) / (acc?.length || 1),
+            type: 'heatmap',
+            colorscale: 'Cividis', // 'cubehelix' equivalent
+            colorbar: { title: 'Log10(Upstream Cells)' },
+            // Handling LogNorm min/max might require setting zmin/zmax or coloraxis.cmin/cmax
+        };
+        const accLayout = {
+            title: 'Flow Accumulation (Log Scale)',
+            xaxis: { title: 'Longitude', range: [grid.extent[0], grid.extent[1]] },
+            yaxis: { title: 'Latitude', range: [grid.extent[2], grid.extent[3]], scaleanchor: "x", scaleratio: 1 },
+            width: 800, height: 600, showlegend: false
+        };
+        console.log("--- Plotting Flow Accumulation (Placeholder) ---");
+        // await savePlot([accTrace], accLayout, 'acc_plot.png');
+        */
+
+        // Get selected watershed name from the dropdown
+        const selectedCuenca = clickr.value; // Assuming clickr is the select element
+
+        // Determine accumulation threshold based on selected watershed
+        let num;
+        if (selectedCuenca === 'ARROYO_INDIA') {
+            num = 70000;
+        } else if (selectedCuenca === 'ARROYO_CADENA') {
+            num = 10000;
+        } else if (selectedCuenca === 'AGUSTIN_MELGAR') {
+            num = 100000;
+        } else if (selectedCuenca === 'CAMACHO_GRUÑIDORA') {
+            num = 150000;
+        } else if (selectedCuenca === 'CANAL_SANTA_ROSA') {
+            num = 150000;
+        } else if (selectedCuenca === 'LAGUNA_DEL_REY') {
+            num = 100000;
+        } else if (selectedCuenca === 'LAGUNA_DE_SANTIAGUILLO') {
+            num = 100000;
+        } else if (selectedCuenca === 'LAGUNA_VIESCA') {
+            num = 75000;
+        } else if (selectedCuenca === 'LA_TAMPONA') {
+            num = 70000;
+        } else if (selectedCuenca === 'LOS_ANGELES') {
+            num = 40000;
+        } else if (selectedCuenca === 'NAZARENO') {
+            num = 60000;
+        } else if (selectedCuenca === 'PRESA_FRANCISCO_ZARCO') {
+            num = 60000;
+        } else if (selectedCuenca === 'PRESA_LA_FLOR') {
+            num = 40000;
+        } else if (selectedCuenca === 'PRESA_LAZARO_CARDENAS') {
+            num = 100000;
+        } else if (selectedCuenca === 'RIO_ACAPONETA') {
+            num = 50000;
+        } else {
+            num = 50000; // Default threshold if no match
+            console.warn(`Watershed "${selectedCuenca}" not recognized for threshold, using default ${num}`);
+        }
+
+        // Create accumulation mask (placeholder - assumes acc is available)
+        const acc_mask = acc.map(row => row.map(cell => cell > num));
+
+        const [x_snap, y_snap] = grid.snap_to_mask(acc_mask, [x, y]); // Pass mask, not condition string
+
+        const catch_mask = grid.catchment(x_snap, y_snap, fdir, dirmap, 'coordinate');
+
+        grid.clip_to(catch_mask); // Placeholder modifies grid state conceptually
+        const clipped_catch_view = grid.view(catch_mask); // Placeholder view
+
+        // --- Plotting Catchment ---
+        // Apply mask: Replace non-catchment cells with NaN (or null for Plotly)
+        const catchPlotData = npWhere(clipped_catch_view, clipped_catch_view, null); // Use helper
+
+        const catchTrace = {
+            z: catchPlotData,
+            x0: grid.extent[0], dx: (grid.extent[1] - grid.extent[0]) / (catchPlotData[0]?.length || 1),
+            y0: grid.extent[3], dy: -(grid.extent[3] - grid.extent[2]) / (catchPlotData?.length || 1),
+            type: 'heatmap',
+            colorscale: 'Viridis',
+            showscale: false, // No colorbar in original plot command
+            zorder: 1 // Conceptual layering
+        };
+        const catchLayout = {
+            title: "CUENCA QUE DRENA A LA PARCELA",
+            xaxis: { title: 'Longitude', range: [grid.extent[0], grid.extent[1]], showgrid: true }, // grid 'on'
+            yaxis: { title: 'Latitude', range: [grid.extent[2], grid.extent[3]], showgrid: true, scaleanchor: "x", scaleratio: 1 },
+            width: 800, height: 600,
+            // figsize: [8, 6]
+            // fig.patch.set_alpha(0) // Background transparency
+            showlegend: false
+        };
+        console.log("--- Plotting Catchment (Placeholder) ---");
+        // Define output path - Use path.join for cross-platform compatibility
+        const clippedCatchPath = path.join('C:', 'IA_TF', 'IMAGENES', 'clipped_catch.png');
+        await savePlot([catchTrace], catchLayout, clippedCatchPath);
+
+        // Metadata and Area calculation - commented out in Python, skipping translation
+        // clipped_catch.GetMetadata()
+        // metadata = clipped_catch.GetMetadata()
+        // print(metadata)
+        // pgon = Polygon((x, y))
+        // SUPERFICIE=(pgon.area)
+        // print(SUPERFICIE)
+        // area=0.5*np.abs(np.dot(x_snap,np.roll(y_snap,1))-np.dot(y_snap,np.roll(x_snap,1)))
+        // print(area)
+
+        // plt.show() // Display plot
+
+        // --- Extract and Plot River Network ---
+        // Create accumulation mask for river network
+        const river_acc_mask = acc.map(row => row.map(cell => cell > 3000));
+        const branches = grid.extract_river_network(fdir, river_acc_mask, dirmap);
+
+        // sns.set_palette('husl') // Seaborn palette - use Plotly default or specify colors
+        // fig,ax=plt.subplots(figsize=(8.5,6.5))
+        // plt.xlim(grid.bbox[0],grid.bbox[2]) // Note: Python uses bbox[0], bbox[2] for xlim
+        // plt.ylim(grid.bbox[1],grid.bbox[3]) // Note: Python uses bbox[1], bbox[3] for ylim
+        // ax.set_aspect('equal')
+
+        const riverTraces = [];
+        if (branches && branches.features) {
+            branches.features.forEach(branch => {
+                if (branch.geometry && branch.geometry.type === 'LineString') {
+                    const line = npAsArray(branch.geometry.coordinates); // Use helper
+                    const x_coords = line.map(pt => pt[0]);
+                    const y_coords = line.map(pt => pt[1]);
+                    riverTraces.push({
+                        x: x_coords,
+                        y: y_coords,
+                        type: 'scatter',
+                        mode: 'lines',
+                        line: { color: 'blue' } // Simple color, 'husl' needs mapping
+                    });
+                }
+            });
+        }
+
+        const riverLayout = {
+            title: "RED QUE DRENA A LA PARCELA",
+            xaxis: { title: 'Longitude', range: [grid.bbox[0], grid.bbox[2]] }, // Use bbox per Python code
+            yaxis: { title: 'Latitude', range: [grid.bbox[1], grid.bbox[3]], scaleanchor: "x", scaleratio: 1 }, // Use bbox & aspect ratio
+            width: 850, height: 650, // From figsize
+            showlegend: false
+        };
+        console.log("--- Plotting River Network (Placeholder) ---");
+        const linePath = path.join('C:', 'IA_TF', 'IMAGENES', 'line.png');
+        await savePlot(riverTraces, riverLayout, linePath);
+
+        // plt.show() // Display plot
+
+        // --- Calculate and Plot Distance to Outlet ---
+        const dist = grid.distance_to_outlet(x_snap, y_snap, fdir, dirmap, 'coordinate');
+
+        // fig,ax=plt.subplots(figsize=(8,6))
+        // fig.patch.set_alpha(0)
+        // plt.grid('on',zorder=0)
+        // im=ax.imshow(dist,extent=grid.extent, zorder=2, cmap='cubehelix_r')
+        // plt.colorbar(im,ax=ax, label="Distancia a la salida (celdas)")
+
+        const distTrace = {
+            z: dist,
+            x0: grid.extent[0], dx: (grid.extent[1] - grid.extent[0]) / (dist[0]?.length || 1),
+            y0: grid.extent[3], dy: -(grid.extent[3] - grid.extent[2]) / (dist?.length || 1),
+            type: 'heatmap',
+            colorscale: 'Cividis_r', // cubehelix_r equivalent
+            colorbar: {
+                title: 'Distancia a la salida (celdas)'
+            },
+            zorder: 2 // Conceptual layering
+        };
+        const distLayout = {
+            title: "Distance to Outlet",
+            xaxis: { title: 'Longitude', range: [grid.extent[0], grid.extent[1]], showgrid: true }, // grid 'on'
+            yaxis: { title: 'Latitude', range: [grid.extent[2], grid.extent[3]], showgrid: true, scaleanchor: "x", scaleratio: 1 },
+            width: 800, height: 600, // From figsize
+            // fig.patch.set_alpha(0) // Background transparency
+            showlegend: false
+        };
+        console.log("--- Plotting Distance to Outlet (Placeholder) ---");
+        const distPath = path.join('C:', 'IA_TF', 'IMAGENES', 'dist.png');
+        await savePlot([distTrace], distLayout, distPath);
+
+        // plt.show() // Display plot
+        alert("Processing complete. Check console and saved image files (placeholders created).");
+
+    } // End of obtener function
+
+    // --- ELECCION function ---
+    // Needs to be async because it calls async raster operations
+    async function ELECCION(event) {
+        // global grid // Use JS scope
+        // global dem // Use JS scope
+        // global entradaLAT // Use JS scope
+        // global entradaLON // Use JS scope
+        // from pysheds.grid import Grid // Not needed
+
+        // Remove previous input elements if they exist
+        if (entradaLAT && entradaLAT.parentNode) entradaLAT.parentNode.removeChild(entradaLAT);
+        if (entradaLON && entradaLON.parentNode) entradaLON.parentNode.removeChild(entradaLON);
+        const latLabel = document.getElementById('latLabel');
+        if (latLabel) latLabel.remove();
+        const lonLabel = document.getElementById('lonLabel');
+        if (lonLabel) lonLabel.remove();
+        const anunciaLabel = document.getElementById('anunciaLabel');
+        if (anunciaLabel) anunciaLabel.remove();
+        const datosLabel = document.getElementById('datosLabel');
+        if (datosLabel) datosLabel.remove();
+        const calculaButton = document.getElementById('calculaButton');
+        if (calculaButton) calculaButton.remove();
+
+
+        // Display informational labels
+        const ANUNCIA = createLabel("DEL DEM QUE SE OBTENDRÁ,\nELIGE LAS COORDENADAS DONDE SE UBICA LA PARCELA\nYA QUE DESDE ESE PUNTO SE DELINEARÁ LA CUENCA QUE DRENA AL\nPUNTO DE INTERÉS Y SE MOSTRARÁ LA RED DE DRENAJE\nRECUEDE QUE LA LONGITUD ES NEGATIVA.\nSOLO CIERRE EL MAPA PARA CTIVAR", 400, 70);
+        ANUNCIA.id = 'anunciaLabel';
+        ANUNCIA.style.font = 'bold 8pt Helvetica';
+        ANUNCIA.style.color = 'blue';
+        ANUNCIA.style.whiteSpace = 'pre'; // Preserve line breaks
+
+        const DATOS = createLabel("LAS IMAGENES GENERADAS SERAN GUARDADAS\nEN LA CARPETA TITULADA: IMAGENES", 570, 240);
+        DATOS.id = 'datosLabel';
+        DATOS.style.font = 'bold 8pt Helvetica';
+        DATOS.style.color = 'blue';
+        DATOS.style.whiteSpace = 'pre'; // Preserve line breaks
+
+        // Create Latitude input
+        const entradaLAT_lbl = createLabel("LATITUD", 400, 215);
+        entradaLAT_lbl.id = 'latLabel';
+        entradaLAT = document.createElement('input'); // Assign to global variable
+        entradaLAT.type = 'number'; // Use number type for coordinates
+        entradaLAT.style.position = 'absolute';
+        entradaLAT.style.left = '500px';
+        entradaLAT.style.top = '215px';
+        entradaLAT.style.width = '70px'; // Adjust width
+        ventana.appendChild(entradaLAT);
+
+        // Create Longitude input
+        const entradaLON_lbl = createLabel("LONGITUD", 400, 265);
+        entradaLON_lbl.id = 'lonLabel';
+        entradaLON = document.createElement('input'); // Assign to global variable
+        entradaLON.type = 'number'; // Use number type for coordinates
+        entradaLON.step = 'any'; // Allow decimals
+        entradaLON.style.position = 'absolute';
+        entradaLON.style.left = '500px';
+        entradaLON.style.top = '265px';
+        entradaLON.style.width = '70px'; // Adjust width
+        ventana.appendChild(entradaLON);
+
+        // Get selected watershed name
+        const selectedCuenca = clickr.value; // clickr is the select element
+
+        // Construct input PNG path
+        // !! IMPORTANT: Assumes PNG files exist at this exact path structure.
+        // !! This will likely fail in a standard browser/Node setup without adjustment.
+        const input_file_path = path.join('C:', 'IA_TF', 'PNG', `${selectedCuenca}.PNG`);
+        console.log(`Input PNG path: ${input_file_path}`);
+
+        // --- Rasterio equivalent using geotiff.js ---
+        // This section is highly conceptual and depends heavily on the exact structure
+        // of the PNG and the desired GeoTIFF output.
+        // Reading non-geospatial PNGs and assigning geo-info is complex.
+        // Assuming the PNG can be read as raw pixel data and we manually assign georeferencing.
+        // THIS IS A MAJOR SIMPLIFICATION.
+        let data; // To hold pixel data
+        let sourceWidth, sourceHeight;
+        let transform; // To hold the affine transform parameters
+        let crs = 'EPSG:4326'; // Assuming WGS84
+
+        console.warn(`Attempting to read PNG '${input_file_path}' and create GeoTIFF. This is highly simplified.`);
+        // We cannot directly read PNG with geotiff.js and assign geo info easily.
+        // A more robust solution would use a library like GDAL (possibly via WebAssembly or a server).
+        // For this translation, we'll simulate reading data and dimensions.
+        // Replace this with actual PNG reading if possible in your environment (e.g., using canvas API in browser).
+        console.log(`Placeholder: Simulating reading data from ${input_file_path}`);
+        // Dummy data dimensions (replace with actual if PNG reading is implemented)
+        sourceWidth = 500;
+        sourceHeight = 400;
+        // Dummy pixel data (e.g., a 3-band RGB image represented flatly or per band)
+        // geotiff.js write expects specific formats, e.g., [R1, G1, B1, R2, G2, B2,...] or [[R...],[G...],[B...]]
+        // Creating realistic dummy data matching potential PNG structure is complex.
+        // Let's assume 3 bands, flat array:
+        data = [new Uint8Array(sourceWidth * sourceHeight).fill(100), // Band 1 (dummy)
+                new Uint8Array(sourceWidth * sourceHeight).fill(150), // Band 2 (dummy)
+                new Uint8Array(sourceWidth * sourceHeight).fill(200)]; // Band 3 (dummy)
+        const bands = [1, 2, 3]; // Corresponding to data array structure
+
+        // Define bounds and calculate transform based on selected watershed
+        // rasterio.transform.from_bounds(west, south, east, north, width, height)
+        // Affine transform: [pixel_width, row_rotation, x_origin, col_rotation, -pixel_height, y_origin]
+        let west, south, east, north;
+        const width = sourceWidth; // Use placeholder width
+        const height = sourceHeight; // Use placeholder height
+
+        if (selectedCuenca === 'AGUSTIN_MELGAR') {
+            [west, south, east, north] = [-106.2677, 23.9305, -102.2895, 26.1073];
+        } else if (selectedCuenca === 'ARROYO_CADENA') {
+            [west, south, east, north] = [-104.4917, 25.6115, -103.8226, 26.4570];
+        } else if (selectedCuenca === 'ARROYO_INDIA') {
+            [west, south, east, north] = [-105.4524, 25.5797, -103.3270, 26.7427];
+        } else if (selectedCuenca === 'CAMACHO_GRUÑIDORA') {
+            [west, south, east, north] = [-102.8048, 24.4523, -102.5051, 24.9014];
+        } else if (selectedCuenca === 'CANAL_SANTA_ROSA') {
+            [west, south, east, north] = [-104.1687, 25.4428, -103.2790, 26.5876];
+        } else if (selectedCuenca === 'LAGUNA_DEL_REY') {
+            [west, south, east, north] = [-104.173, 26.111, -103.284, 26.755];
+        } else if (selectedCuenca === 'LAGUNA_DE_SANTIAGUILLO') {
+            [west, south, east, north] = [-105.335, 24.597, -104.658, 25.194];
+        } else if (selectedCuenca === 'LAGUNA_VIESCA') {
+            [west, south, east, north] = [-102.743, 24.853, -102.535, 25.075];
+        } else if (selectedCuenca === 'LA_TAMPONA') {
+            [west, south, east, north] = [-104.518, 24.005, -103.853, 24.618];
+        } else if (selectedCuenca === 'LOS_ANGELES') {
+            [west, south, east, north] = [-103.919, 25.083, -103.498, 25.745];
+        } else if (selectedCuenca === 'NAZARENO') {
+            [west, south, east, north] = [-103.706, 24.970, -103.294, 25.456];
+        } else if (selectedCuenca === 'PRESA_FRANCISCO_ZARCO') {
+            [west, south, east, north] = [-104.108, 24.554, -103.510, 25.589];
+        } else if (selectedCuenca === 'PRESA_LA_FLOR') {
+            [west, south, east, north] = [-103.811, 24.099, -102.632, 25.081];
+        } else if (selectedCuenca === 'PRESA_LAZARO_CARDENAS') {
+            [west, south, east, north] = [-105.769, 25.033, -104.840, 26.205];
+        } else if (selectedCuenca === 'RIO_ACAPONETA') {
+            [west, south, east, north] = [-105.433, 22.994, -104.845, 23.889];
+        } else {
+             console.error(`Unknown watershed: ${selectedCuenca}. Cannot determine bounds.`);
+             alert(`Error: Bounds not defined for watershed ${selectedCuenca}.`);
+             return;
+        }
+
+        const pixelWidth = (east - west) / width;
+        const pixelHeight = (north - south) / height;
+        // Affine transform: [pixel_width, 0, x_origin (west), 0, -pixel_height, y_origin (north)]
+        transform = [pixelWidth, 0, west, 0, -pixelHeight, north];
+
+        // Define output GeoTIFF path
+        const output_file_path = path.join('C:', 'IA_TF', 'TIFF', `${selectedCuenca}.tif`);
+        console.log(`Output TIFF path: ${output_file_path}`);
+
+        // Write the GeoTIFF using geotiff.js
+        // This requires careful setup of metadata
+        const metadata = {
+            width: width,
+            height: height,
+            // Define sample format based on dummy data type (e.g., Uint8)
+            // See geotiff.js documentation for SampleFormat options
+            // SampleFormat: 1, // SAMPLEFORMAT_UINT
+            BitsPerSample: [8, 8, 8], // Assuming 8-bit RGB
+            SamplesPerPixel: 3,
+            PhotometricInterpretation: 2, // PHOTOMETRIC_RGB
+            ModelPixelScale: [pixelWidth, pixelHeight, 0], // [ScaleX, ScaleY, ScaleZ]
+            ModelTiepoint: [0, 0, 0, west, north, 0], // [ImageX, ImageY, ImageZ, WorldX, WorldY, WorldZ]
+            // CRS info - geotiff.js uses GeoKeys
+            // Need to map 'EPSG:4326' to appropriate GeoKeys (e.g., GeographicTypeGeoKey = 4326)
+            GeographicTypeGeoKey: 4326, // For EPSG:4326
+            // Add other necessary GeoKeys if available/needed
+            GDAL_NODATA: "0", // Setting nodata value
+        };
+
+        try {
+            // Ensure parent directory exists
+            const outputDir = path.dirname(output_file_path);
+             if (!fs.existsSync(outputDir)){
+                 fs.mkdirSync(outputDir, { recursive: true });
+             }
+
+            // geotiff.write expects a flat ArrayBuffer or TypedArray
+            // Combine the dummy band data if needed, or pass as is if supported
+            // This part is highly dependent on the actual PNG reading result and geotiff.js expectations
+            // Assuming 'data' is currently [[band1_flat], [band2_flat], [band3_flat]]
+            // We might need to interleave it: [R1, G1, B1, R2, G2, B2, ...]
+            const interleavedData = new Uint8Array(width * height * 3);
+            for (let i = 0; i < width * height; i++) {
+                interleavedData[i * 3 + 0] = data[0][i]; // R
+                interleavedData[i * 3 + 1] = data[1][i]; // G
+                interleavedData[i * 3 + 2] = data[2][i]; // B
+            }
+            const arrayBuffer = interleavedData.buffer;
+
+            await write(arrayBuffer, metadata, output_file_path); // Use geotiff.js write
+            console.log(`Successfully wrote placeholder GeoTIFF to ${output_file_path}`);
+
+            // Load the created GeoTIFF using the Grid placeholder class
+            grid = await Grid.from_raster(output_file_path); // Assign to global grid
+            console.log("Grid loaded:", grid); // Log the placeholder grid object
+            // Read the DEM data (first band assumed)
+            dem = await grid.read_raster(output_file_path); // Assign to global dem
+
+            if (!dem) {
+                 throw new Error("Failed to read DEM data from the generated GeoTIFF.");
+            }
+             console.log(`DEM data loaded with ${dem.length} rows, ${dem[0]?.length || 0} columns.`);
+
+            // Enable the 'Obtener DEM' button
+            const calcula = document.createElement('button');
+            calcula.id = 'calculaButton';
+            calcula.innerHTML = "OBTENER<br>DEM"; // Use innerHTML for line break
+            calcula.onclick = obtener; // Assign the obtener function
+            // calcula.bd=7 // Border styling done with CSS
+            calcula.style.position = 'absolute';
+            calcula.style.left = '300px';
+            calcula.style.top = '170px';
+            calcula.style.border = '3px outset grey'; // Approximate bd=7
+            calcula.style.padding = '5px';
+            ventana.appendChild(calcula);
+
+
+        } catch (error) {
+            console.error("Error processing raster data:", error);
+            alert(`Error creating or reading GeoTIFF: ${error.message}`);
+        }
+
+        // Commented out elif blocks from Python are ignored as they were not active.
+
+    } // End of ELECCION function
+
+    // --- introduce_cuenca function ---
+    function introduce_cuenca() {
+        // global ventana // Not needed in JS DOM manipulation
+        // global clickr // Use JS scope
+        // from pysheds.grid import Grid // Not needed
+
+        // Remove previous dropdown if it exists
+         const existingDrop = document.getElementById('cuencaDropdown');
+         if (existingDrop) existingDrop.remove();
+
+
+        const options = [
+            "ELIGE CUENCA",
+            "ARROYO_CADENA",
+            "AGUSTIN_MELGAR",
+            "ARROYO_INDIA",
+            "CAMACHO_GRUÑIDORA",
+            "CANAL_SANTA_ROSA",
+            "LAGUNA_DEL_REY",
+            "LAGUNA_DE_SANTIAGUILLO",
+            "LAGUNA_VIESCA",
+            "LA_TAMPONA",
+            "LOS_ANGELES",
+            "NAZARENO",
+            "PRESA_FRANCISCO_ZARCO",
+            "PRESA_LA_FLOR",
+            "PRESA_LAZARO_CARDENAS",
+            "RIO_ACAPONETA"
+        ];
+
+        // Create Select dropdown
+        clickr = document.createElement('select'); // Assign to global variable
+        clickr.id = 'cuencaDropdown';
+        clickr.style.position = 'absolute';
+        clickr.style.left = '60px';
+        clickr.style.top = '170px';
+
+        options.forEach((optionText, index) => {
+            const option = document.createElement('option');
+            option.value = optionText;
+            option.textContent = optionText;
+            if (index === 0) {
+                option.disabled = true; // Disable the placeholder option
+                option.selected = true; // Make it the default display
+            }
+            clickr.appendChild(option);
+        });
+
+        // Add event listener to call ELECCION when selection changes
+        clickr.addEventListener('change', ELECCION);
+
+        ventana.appendChild(clickr);
+
+    } // End of introduce_cuenca function
+
+    // --- by_cuenca function ---
+    function by_cuenca() {
+        // ventana.destroy() // Equivalent in browser: close window or navigate away
+        window.close(); // Attempts to close the current window/tab
+        // Or perhaps just clear the interface:
+        // document.body.innerHTML = '<h1>Window Closed</h1>';
+    }
+
+    // --- Buttons ---
+    function createButton(text, command, x, y) {
+        const button = document.createElement('button');
+        button.textContent = text;
+        button.onclick = command;
+        button.style.position = 'absolute';
+        button.style.left = `${x}px`;
+        button.style.top = `${y}px`;
+        ventana.appendChild(button);
+        return button;
+    }
+
+    const CUENCA_button = createButton("CUENCA", introduce_cuenca, 50, 100);
+    const SALIR_button = createButton("SALIR", by_cuenca, 50, 250);
+
+    // --- Main loop equivalent ---
+    // The tkinter mainloop keeps the window open and responsive.
+    // In a browser, the script runs, sets up the UI and event listeners,
+    // and the browser's event loop keeps the page alive. No explicit mainloop call needed.
+    console.log("GUI setup complete. Waiting for user interaction.");
+
+} else {
+    console.error("This script requires a browser environment to create the GUI.");
+    // If run in Node.js without a browser context, the GUI part will not execute.
+    // You could potentially run the non-GUI parts (like file processing placeholders) here.
+}
+
+
+// Commented out Python code sections (plotting examples, etc.) are not translated
+// as they were not part of the active script logic.
+// # Convert Raster to numpy array
+// ##fig=plt.figure(figsize=(8,6))
+// ##fig.patch.set_alpha(0)
+// ... (rest of commented Python code) ...
